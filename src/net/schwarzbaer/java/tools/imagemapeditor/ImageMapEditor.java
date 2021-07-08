@@ -65,8 +65,6 @@ public class ImageMapEditor {
 		mainWindow = new StandardMainWindow(title, closeOp);
 		
 		imageView = new ImageView(800,600);
-		if (this.mapImage!=null)
-			imageView.setImage(this.mapImage.image);
 		
 		areaList = new JList<>(new AreaListModel(areas));
 		JScrollPane areaListScrollPane = new JScrollPane(areaList);
@@ -126,7 +124,8 @@ public class ImageMapEditor {
 	}
 
 	private void initialize() {
-		// TODO Auto-generated method stub
+		if (mapImage!=null)
+			imageView.setImage(mapImage.image);
 	}
 
 	@SuppressWarnings("unused")
@@ -162,15 +161,14 @@ public class ImageMapEditor {
 		}
 	}
 	
-	@SuppressWarnings("unused")
-	private static class MapImage {
+	public static class MapImage {
 		
-		enum Type { File, URL }
+		private enum Type { File, URL }
 
-		final Type type;
-		final BufferedImage image;
-		final File file;
-		final String url;
+		public final Type type;
+		public final BufferedImage image;
+		public final File file;
+		public final String url;
 		
 		private MapImage(BufferedImage image, File file) {
 			this.type = Type.File;
@@ -186,7 +184,7 @@ public class ImageMapEditor {
 			this.url = url;
 		}
 
-		static MapImage loadImage(File file) {
+		public static MapImage loadImage(File file) {
 			try {
 				return new MapImage(ImageIO.read(file),file);
 			} catch (IOException e) {
@@ -196,7 +194,7 @@ public class ImageMapEditor {
 			}
 		}
 
-		static MapImage loadImage(String urlStr) {
+		public static MapImage loadImage(String urlStr) {
 			try {
 				return new MapImage(ImageIO.read(new URL(urlStr)),urlStr);
 			} catch (MalformedURLException e) {
