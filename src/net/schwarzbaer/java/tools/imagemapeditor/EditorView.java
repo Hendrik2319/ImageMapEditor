@@ -21,13 +21,13 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 	
 	private BufferedImage image;
 	private final AreaListModel areaListModel;
-	private AreaEditing formEditing;
+	private AreaEditing areaEditing;
 
 	public EditorView(int width, int height, AreaListModel areaListModel) { this(null, width, height, areaListModel); }
 	public EditorView(BufferedImage image, int width, int height, AreaListModel areaListModel) {
 		this.image = image;
 		this.areaListModel = areaListModel;
-		formEditing = null;
+		areaEditing = null;
 		
 		setPreferredSize(width, height);
 		activateMapScale(COLOR_AXIS, "px", true);
@@ -65,16 +65,16 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 		}
 		
 		boolean mustRepaint;
-		if (formEditing!=null && formEditing.isArea(nearestArea)) {
+		if (areaEditing!=null && areaEditing.area==nearestArea) {
 			mustRepaint = true;
 		} else {
-			mustRepaint = formEditing!=null || nearestArea!=null;
-			formEditing = AreaEditing.createFor(nearestArea);
+			mustRepaint = areaEditing!=null || nearestArea!=null;
+			areaEditing = AreaEditing.createFor(nearestArea);
 		}
 		
-		if (formEditing!=null) {
+		if (areaEditing!=null) {
 			float minDist = viewState.convertLength_ScreenToLength(AreaEditing.MIN_HIGHLIGHT_HPOINT_DISTANCE_SCR);
-			formEditing.setMousePoint(pX,pY,minDist);
+			areaEditing.setMousePoint(pX,pY,minDist);
 		}
 		
 		if (mustRepaint) repaint();
@@ -119,18 +119,37 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 			this.handlePoints = handlePoints;
 			highlightedHPindex = -1;
 		}
-		
-		boolean isArea(Area area) {
-			return this.area == area;
-		}
 
 		abstract void setMousePoint(float pX, float pY, float minDist);
-		abstract boolean onEntered (MouseEvent e);
-		abstract boolean onMoved   (MouseEvent e);
-		abstract boolean onExited  (MouseEvent e);
-		abstract boolean onPressed (MouseEvent e);
-		abstract boolean onReleased(MouseEvent e);
-		abstract boolean onDragged (MouseEvent e);
+//		abstract boolean onEntered (MouseEvent e);
+//		abstract boolean onMoved   (MouseEvent e);
+//		abstract boolean onExited  (MouseEvent e);
+		protected abstract void startDragging(float pX, float pY);
+		protected abstract void stopDragging(float pX, float pY);
+		protected abstract void dragging(float pX, float pY);
+
+		void onPressed (MouseEvent e, ViewState viewState) {
+			Point p = e.getPoint();
+			float pX = viewState.convertPos_ScreenToAngle_LongX(p.x);
+			float pY = viewState.convertPos_ScreenToAngle_LatY (p.y);
+			float minDist = viewState.convertLength_ScreenToLength(MIN_HIGHLIGHT_HPOINT_DISTANCE_SCR);
+			setMousePoint(pX, pY, minDist);
+			if (highlightedHPindex<0) return;
+			startDragging(pX,pY);
+		}
+
+		void onReleased(MouseEvent e, ViewState viewState) {
+			Point p = e.getPoint();
+			float pX = viewState.convertPos_ScreenToAngle_LongX(p.x);
+			float pY = viewState.convertPos_ScreenToAngle_LatY (p.y);
+			stopDragging(pX,pY);
+		}
+		void onDragged (MouseEvent e, ViewState viewState) {
+			Point p = e.getPoint();
+			float pX = viewState.convertPos_ScreenToAngle_LongX(p.x);
+			float pY = viewState.convertPos_ScreenToAngle_LatY (p.y);
+			dragging(pX,pY);
+		}
 		
 		interface HandlePointAction {
 			void applyTo(HandlePoint hp, boolean isHighlighted);
@@ -161,6 +180,8 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 		static class CircleEditing extends AreaEditing {
 			private static final int HPINDEX_CENTER = 0;
 			private static final int HPINDEX_RADIUS = 1;
+			private float dragDeltaX;
+			private float dragDeltaY;
 			
 			CircleEditing(Area area) {
 				super(area, new HandlePoint(area.shape.center), new HandlePoint(area.shape.center, false));
@@ -191,12 +212,38 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 				}
 			}
 
-			@Override boolean onEntered (MouseEvent e) { return false; };
-			@Override boolean onMoved   (MouseEvent e) { return false; };
-			@Override boolean onExited  (MouseEvent e) { return false; };
-			@Override boolean onPressed (MouseEvent e) { return false; };
-			@Override boolean onReleased(MouseEvent e) { return false; };
-			@Override boolean onDragged (MouseEvent e) { return false; };
+			@Override protected void startDragging(float pX, float pY) {
+				if (highlightedHPindex==HPINDEX_CENTER) {
+					dragDeltaX = pX-area.shape.center.x;
+					dragDeltaY = pY-area.shape.center.y;
+				}
+			}
+
+			@Override protected void stopDragging(float pX, float pY) {
+				dragging(pX, pY);
+			}
+
+			@Override protected void dragging(float pX, float pY) {
+				switch (highlightedHPindex) {
+				case HPINDEX_CENTER:
+					area.shape.center.x = Math.round( pX-dragDeltaX );
+					area.shape.center.y = Math.round( pY-dragDeltaY );
+					handlePoints[HPINDEX_CENTER].x = area.shape.center.x;
+					handlePoints[HPINDEX_CENTER].y = area.shape.center.y;
+					handlePoints[HPINDEX_RADIUS].isVisible = false;
+					break;
+					
+				case HPINDEX_RADIUS:
+					int cX = area.shape.center.x;
+					int cY = area.shape.center.y;
+					double r = Math.sqrt((cX-pX)*(cX-pX)+(cY-pY)*(cY-pY));
+					area.shape.radius = (int) Math.round(r);
+					handlePoints[HPINDEX_RADIUS].isVisible = true;
+					handlePoints[HPINDEX_RADIUS].x = (float) ((pX-cX)/r*area.shape.radius)+cX;
+					handlePoints[HPINDEX_RADIUS].y = (float) ((pY-cY)/r*area.shape.radius)+cY;
+					break;
+				}
+			}
 		}
 		
 		static class RectEditing extends AreaEditing {
@@ -254,24 +301,29 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 				d1 = Math.sqrt((c2X-pX)*(c2X-pX)+(c2Y-pY)*(c2Y-pY)); if (d1<d) { d=d1; highlightedHPindex = minDist<d ? -1 : HPINDEX_C22; }
 				d1 = Math.sqrt((c2X-pX)*(c2X-pX)+(c1Y-pY)*(c1Y-pY)); if (d1<d) { d=d1; highlightedHPindex = minDist<d ? -1 : HPINDEX_C21; }
 			}
-			
-			@Override boolean onEntered (MouseEvent e) { return false; };
-			@Override boolean onMoved   (MouseEvent e) { return false; };
-			@Override boolean onExited  (MouseEvent e) { return false; };
-			@Override boolean onPressed (MouseEvent e) { return false; };
-			@Override boolean onReleased(MouseEvent e) { return false; };
-			@Override boolean onDragged (MouseEvent e) { return false; };
+
+			@Override protected void startDragging(float pX, float pY) {
+				// TODO Auto-generated method stub
+			}
+
+			@Override protected void stopDragging(float pX, float pY) {
+				// TODO Auto-generated method stub
+			}
+
+			@Override protected void dragging(float pX, float pY) {
+				// TODO Auto-generated method stub
+			}
 		}
 	}
 	
 	
-	@Override public void mouseEntered (MouseEvent e) { setHighlightedArea(e.getPoint()); if (formEditing!=null) formEditing.onEntered (e); }
-	@Override public void mouseMoved   (MouseEvent e) { setHighlightedArea(e.getPoint()); if (formEditing!=null) formEditing.onMoved   (e); }
-	@Override public void mouseExited  (MouseEvent e) { setHighlightedArea((Point)null ); if (formEditing!=null) formEditing.onExited  (e); }
+	@Override public void mouseEntered (MouseEvent e) { setHighlightedArea(e.getPoint()); /* if (areaEditing!=null) areaEditing.onEntered (e); */ }
+	@Override public void mouseMoved   (MouseEvent e) { setHighlightedArea(e.getPoint()); /* if (areaEditing!=null) areaEditing.onMoved   (e); */ }
+	@Override public void mouseExited  (MouseEvent e) { setHighlightedArea((Point)null ); /* if (areaEditing!=null) areaEditing.onExited  (e); */ }
 	
-	@Override public void mousePressed (MouseEvent e) { /* if (formEditing==null || !formEditing.onPressed (e)) super.mousePressed (e); */ }
-	@Override public void mouseReleased(MouseEvent e) { /* if (formEditing==null || !formEditing.onReleased(e)) super.mouseReleased(e); */ }
-	@Override public void mouseDragged (MouseEvent e) { /* if (formEditing==null || !formEditing.onDragged (e)) super.mouseDragged (e); */ }
+	@Override public void mousePressed (MouseEvent e) { if (areaEditing!=null) { areaEditing.onPressed (e, viewState); repaint(); } }
+	@Override public void mouseReleased(MouseEvent e) { if (areaEditing!=null) { areaEditing.onReleased(e, viewState); repaint(); } }
+	@Override public void mouseDragged (MouseEvent e) { if (areaEditing!=null) { areaEditing.onDragged (e, viewState); repaint(); } }
 	
 	@Override public void mouseClicked   (MouseEvent e) { super.mouseClicked(e); }
 	@Override public void mouseWheelMoved(MouseWheelEvent e) { super.mouseWheelMoved(e); }
@@ -308,16 +360,16 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 	private void paintAreas(Graphics2D g2, int x0, int y0) {
 		g2.setColor(COLOR_AREA);
 		for (Area area : areaListModel)
-			if (formEditing==null || formEditing.area!=area)
+			if (areaEditing==null || areaEditing.area!=area)
 				paintArea(g2, x0, y0, area);
-		if (formEditing!=null) {
+		if (areaEditing!=null) {
 			g2.setColor(COLOR_HIGHLIGHTED_AREA);
-			paintArea(g2, x0, y0, formEditing.area);
+			paintArea(g2, x0, y0, areaEditing.area);
 			paintHandlePoints(g2, x0, y0);
 		}
 	}
 	private void paintHandlePoints(Graphics2D g2, int x0, int y0) {
-		formEditing.forEachPoint((hp,isHighlighted)->{
+		areaEditing.forEachPoint((hp,isHighlighted)->{
 			if (!hp.isVisible) return;
 			int hpX = viewState.convertPos_AngleToScreen_LongX(hp.x);
 			int hpY = viewState.convertPos_AngleToScreen_LatY (hp.y);

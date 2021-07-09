@@ -23,7 +23,7 @@ public class Area {
 		
 		public final Shape.Type type;
 		public final Point center;
-		public final int radius;
+		public       int   radius;
 		public final Point corner1;
 		public final Point corner2;
 		
