@@ -1,13 +1,13 @@
 package net.schwarzbaer.java.tools.imagemapeditor;
 
 import java.awt.BorderLayout;
-import java.awt.Point;
 import java.awt.event.ActionListener;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.Iterator;
 import java.util.Vector;
 import java.util.function.BiConsumer;
 
@@ -28,14 +28,13 @@ import javax.swing.event.ListDataEvent;
 import javax.swing.event.ListDataListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
-import net.schwarzbaer.gui.ImageView;
 import net.schwarzbaer.gui.StandardMainWindow;
 import net.schwarzbaer.gui.StandardMainWindow.DefaultCloseOperation;
 
 public class ImageMapEditor {
 
 	private final StandardMainWindow mainWindow;
-	private final ImageView imageView;
+	private final EditorView editorView;
 	private final JList<Area> areaList;
 	private MapImage mapImage;
 
@@ -54,28 +53,22 @@ public class ImageMapEditor {
 	ImageMapEditor(String title, MapImage mapImage, Vector<Area> areas, boolean asStandAloneApp) {
 		this.mapImage = mapImage;
 		
-		JFileChooser imageFileChooser = new JFileChooser("./");
-		imageFileChooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
-		imageFileChooser.setMultiSelectionEnabled(false);
-		imageFileChooser.addChoosableFileFilter(new FileNameExtensionFilter("JPEG Image", "jpg", "jpeg"));
-		imageFileChooser.addChoosableFileFilter(new FileNameExtensionFilter("PNG Image", "png"));
-		
 		DefaultCloseOperation closeOp = asStandAloneApp ? DefaultCloseOperation.EXIT_ON_CLOSE : DefaultCloseOperation.DISPOSE_ON_CLOSE;
-		//String title = "ImageMapEditor";
 		mainWindow = new StandardMainWindow(title, closeOp);
 		
-		imageView = new ImageView(800,600);
-		
-		areaList = new JList<>(new AreaListModel(areas));
+		AreaListModel areaListModel = new AreaListModel(areas);
+		areaList = new JList<>(areaListModel);
 		JScrollPane areaListScrollPane = new JScrollPane(areaList);
 		areaListScrollPane.setBorder(BorderFactory.createTitledBorder("List of Areas"));
+		
+		editorView = new EditorView(800,600,areaListModel);
 		
 		JPanel leftPanel = new JPanel(new BorderLayout(3,3));
 		leftPanel.add(areaListScrollPane,BorderLayout.CENTER);
 		
 		JPanel contentPane = new JPanel(new BorderLayout(3,3));
 		contentPane.add(leftPanel,BorderLayout.WEST);
-		contentPane.add(imageView,BorderLayout.CENTER);
+		contentPane.add(editorView,BorderLayout.CENTER);
 		
 		JMenuBar menuBar = new JMenuBar();
 		
@@ -92,6 +85,12 @@ public class ImageMapEditor {
 		}
 		
 		if (this.mapImage==null) {
+			JFileChooser imageFileChooser = new JFileChooser("./");
+			imageFileChooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+			imageFileChooser.setMultiSelectionEnabled(false);
+			imageFileChooser.addChoosableFileFilter(new FileNameExtensionFilter("JPEG Image", "jpg", "jpeg"));
+			imageFileChooser.addChoosableFileFilter(new FileNameExtensionFilter("PNG Image", "png"));
+			
 			JMenu imageMenu = menuBar.add(new JMenu("Image"));
 			imageMenu.add(createMenuItem("Load Image from File ...", true, e->{
 				if (imageFileChooser.showOpenDialog(mainWindow)!=JFileChooser.APPROVE_OPTION) return;
@@ -99,7 +98,7 @@ public class ImageMapEditor {
 				MapImage newMapImage = MapImage.loadImage(file);
 				if (newMapImage==null) return;
 				this.mapImage = newMapImage;
-				imageView.setImage(this.mapImage.image);
+				editorView.setImage(this.mapImage.image);
 			}));
 			imageMenu.add(createMenuItem("Load Image from URL ...", true, e->{
 				String urlStr = JOptionPane.showInputDialog(mainWindow, "message", "title", JOptionPane.QUESTION_MESSAGE);
@@ -107,11 +106,9 @@ public class ImageMapEditor {
 				MapImage newMapImage = MapImage.loadImage(urlStr);
 				if (newMapImage==null) return;
 				this.mapImage = newMapImage;
-				imageView.setImage(this.mapImage.image);
+				editorView.setImage(this.mapImage.image);
 			}));
 		}
-		
-		
 		
 		mainWindow.startGUI(contentPane,menuBar);
 	}
@@ -125,11 +122,11 @@ public class ImageMapEditor {
 
 	private void initialize() {
 		if (mapImage!=null)
-			imageView.setImage(mapImage.image);
+			editorView.setImage(mapImage.image);
 	}
-
+	
 	@SuppressWarnings("unused")
-	private static class AreaListModel implements ListModel<Area> {
+	static class AreaListModel implements ListModel<Area>, Iterable<Area> {
 		
 		private final Vector<ListDataListener> listDataListeners;
 		private final Vector<Area> data;
@@ -143,6 +140,7 @@ public class ImageMapEditor {
 		@Override public void    addListDataListener(ListDataListener l) { listDataListeners.   add(l); }
 		@Override public void removeListDataListener(ListDataListener l) { listDataListeners.remove(l); }
 		
+		@Override public Iterator<Area> iterator() { return data.iterator(); }
 		@Override public int getSize() { return data.size(); }
 		@Override public Area getElementAt(int index) { return data.get(index); }
 		
@@ -205,57 +203,6 @@ public class ImageMapEditor {
 				//e.printStackTrace();
 				System.err.printf("IOException while loading image from url \"%s\": %s%n", urlStr, e.getMessage());
 				return null;
-			}
-		}
-	}
-
-	public static class Area {
-		public String title;
-		public String onclick;
-		public Shape shape;
-		
-		public Area(Shape shape, String title, String onclick) {
-			this.shape = shape;
-			this.title = title;
-			this.onclick = onclick;
-		}
-
-		@Override
-		public String toString() {
-			return String.format("%s \"%s\" <%s>", shape, title, onclick);
-		}
-
-		public static class Shape {
-			public enum Type { Rect, Circle }
-			
-			public final Type type;
-			public final Point center;
-			public final int radius;
-			public final Point corner1;
-			public final Point corner2;
-			
-			public Shape(Point center, int radius) {
-				type = Type.Circle;
-				this.corner1 = null;
-				this.corner2 = null;
-				this.center = center;
-				this.radius = radius;
-			}
-			public Shape(Point corner1, Point corner2) {
-				type = Type.Rect;
-				this.corner1 = new Point(Math.min(corner1.x,corner2.x), Math.min(corner1.y,corner2.y));
-				this.corner2 = new Point(Math.max(corner1.x,corner2.x), Math.max(corner1.y,corner2.y));
-				this.center = null;
-				this.radius = 0;
-			}
-			
-			@Override
-			public String toString() {
-				switch (type) {
-				case Circle: return String.format("Circle(%d,%d|%d)", center.x, center.y, radius);
-				case Rect  : return String.format("Rect(%d,%d|%d,%d)", corner1.x, corner1.y, corner2.x, corner2.y);
-				}
-				throw new IllegalStateException();
 			}
 		}
 	}
