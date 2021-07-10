@@ -7,7 +7,11 @@ import java.awt.Point;
 import java.awt.RenderingHints;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
+import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
+import java.util.Vector;
+
+import javax.swing.JPopupMenu;
 
 import net.schwarzbaer.gui.ZoomableCanvas;
 import net.schwarzbaer.java.tools.imagemapeditor.ImageMapEditor.AreaListModel;
@@ -21,12 +25,14 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 	private BufferedImage image;
 	private final AreaListModel areaListModel;
 	private AreaEditing areaEditing;
+	private ContextMenu contextMenu;
 
 	EditorView(int width, int height, AreaListModel areaListModel) { this(null, width, height, areaListModel); }
 	EditorView(BufferedImage image, int width, int height, AreaListModel areaListModel) {
 		this.image = image;
 		this.areaListModel = areaListModel;
 		areaEditing = null;
+		contextMenu = null;
 		
 		setPreferredSize(width, height);
 		activateMapScale(COLOR_AXIS, "px", true);
@@ -34,7 +40,36 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 		activateEditorMode();
 	}
 	
+	boolean isViewStateOK() {
+		return viewState.isOk();
+	}
 	
+	static class ContextMenu extends JPopupMenu {
+		private static final long serialVersionUID = 3266076470264574143L;
+		
+		Point         clickedScreenPos = null;
+		Point2D.Float clickedPos = null;
+		Area          clickedArea = null;
+		private final Vector<InvokeListener> invokeListeners = new Vector<>();
+		
+		ContextMenu() {}
+
+		public void prepareItems() {
+			for (InvokeListener l:invokeListeners)
+				l.prepareMenuItems();
+		}
+		
+		void    addInvokeListener(InvokeListener l) { invokeListeners.   add(l); }
+		void removeInvokeListener(InvokeListener l) { invokeListeners.remove(l); }
+		
+		interface InvokeListener {
+			void prepareMenuItems();
+		}
+	}
+	
+	ContextMenu createContextMenu() {
+		return contextMenu = new ContextMenu();
+	}
 	
 	void setImage(BufferedImage image) {
 		this.image = image;
@@ -70,7 +105,7 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 			mustRepaint = true;
 		} else {
 			mustRepaint = areaEditing!=null || nearestArea!=null;
-			areaEditing = AreaEditing.createFor(nearestArea);
+			areaEditing = AreaEditing.createFor(areaListModel, nearestArea);
 		}
 		
 		if (areaEditing!=null) {
@@ -102,20 +137,22 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 			throw new IllegalStateException();
 		}
 
-		static AreaEditing createFor(Area area) {
+		static AreaEditing createFor(AreaListModel areaListModel, Area area) {
 			if (area==null) return null;
 			switch (area.shape.type) {
-			case Circle: return new CircleEditing(area);
-			case   Rect: return new   RectEditing(area);
+			case Circle: return new CircleEditing(areaListModel, area);
+			case   Rect: return new   RectEditing(areaListModel, area);
 			}
 			throw new IllegalStateException();
 		}
 		
+		private final AreaListModel areaListModel;
 		protected final Area area;
 		protected final HandlePoint[] handlePoints;
 		protected int highlightedHPindex;
 		
-		protected AreaEditing(Area area, HandlePoint... handlePoints) {
+		protected AreaEditing(AreaListModel areaListModel, Area area, HandlePoint... handlePoints) {
+			this.areaListModel = areaListModel;
 			this.area = area;
 			this.handlePoints = handlePoints;
 			highlightedHPindex = -1;
@@ -144,12 +181,14 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 			float pX = viewState.convertPos_ScreenToAngle_LongX(p.x);
 			float pY = viewState.convertPos_ScreenToAngle_LatY (p.y);
 			stopDragging(pX,pY);
+			areaListModel.notifyAreaChanged(area);
 		}
 		void onDragged (MouseEvent e, ViewState viewState) {
 			Point p = e.getPoint();
 			float pX = viewState.convertPos_ScreenToAngle_LongX(p.x);
 			float pY = viewState.convertPos_ScreenToAngle_LatY (p.y);
 			dragging(pX,pY);
+			areaListModel.notifyAreaChanged(area);
 		}
 		
 		interface HandlePointAction {
@@ -190,8 +229,8 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 			private float dragOffsetX;
 			private float dragOffsetY;
 			
-			CircleEditing(Area area) {
-				super(area, new HandlePoint(area.shape.center), new HandlePoint(area.shape.center, false));
+			CircleEditing(AreaListModel areaListModel, Area area) {
+				super(areaListModel, area, new HandlePoint(area.shape.center), new HandlePoint(area.shape.center, false));
 			}
 
 			public static DistanceResult computeDistanceToCircle(Area area, float pX, float pY) {
@@ -262,8 +301,8 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 			private float dragOffsetX;
 			private float dragOffsetY;
 			
-			RectEditing(Area area) {
-				super(area, createHPs(area));
+			RectEditing(AreaListModel areaListModel, Area area) {
+				super(areaListModel, area, createHPs(area));
 			}
 
 			private static HandlePoint[] createHPs(Area area) {
@@ -375,7 +414,23 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 	@Override public void mouseReleased(MouseEvent e) { if (areaEditing!=null) { areaEditing.onReleased(e, viewState); repaint(); } }
 	@Override public void mouseDragged (MouseEvent e) { if (areaEditing!=null) { areaEditing.onDragged (e, viewState); repaint(); } }
 	
-	@Override public void mouseClicked   (MouseEvent e) { super.mouseClicked(e); }
+	@Override public void mouseClicked (MouseEvent e) {
+		if (contextMenu!=null && e.getButton()==MouseEvent.BUTTON3) {
+			Point p = new Point(e.getPoint());
+			contextMenu.clickedArea = areaEditing!=null ? areaEditing.area : null;
+			contextMenu.clickedScreenPos = p;
+			if (viewState.isOk())
+				contextMenu.clickedPos = new Point2D.Float(
+					viewState.convertPos_ScreenToAngle_LongX(p.x),
+					viewState.convertPos_ScreenToAngle_LatY (p.y)
+				);
+			else
+				contextMenu.clickedPos = null;
+			contextMenu.prepareItems();
+			contextMenu.show(this, p.x, p.y);
+		}
+		super.mouseClicked(e);
+	}
 	@Override public void mouseWheelMoved(MouseWheelEvent e) { super.mouseWheelMoved(e); }
 	
 	@Override

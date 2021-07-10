@@ -13,6 +13,16 @@ public class Area {
 		this.onclick = onclick;
 	}
 
+	public Area(Area area) {
+		copyFrom(area);
+	}
+
+	public void copyFrom(Area area) {
+		shape = new Shape(area.shape);
+		title = area.title;
+		onclick = area.onclick;
+	}
+
 	@Override
 	public String toString() {
 		return String.format("%s \"%s\" <%s>", shape, title, onclick);
@@ -32,17 +42,24 @@ public class Area {
 		
 		public Shape(Point center, int radius) {
 			type = Type.Circle;
-			this.corner1 = null;
-			this.corner2 = null;
 			this.center = center;
 			this.radius = radius;
+			this.corner1 = null;
+			this.corner2 = null;
 		}
 		public Shape(Point corner1, Point corner2) {
 			type = Type.Rect;
-			this.corner1 = new Point(Math.min(corner1.x,corner2.x), Math.min(corner1.y,corner2.y));
-			this.corner2 = new Point(Math.max(corner1.x,corner2.x), Math.max(corner1.y,corner2.y));
 			this.center = null;
 			this.radius = 0;
+			this.corner1 = new Point(Math.min(corner1.x,corner2.x), Math.min(corner1.y,corner2.y));
+			this.corner2 = new Point(Math.max(corner1.x,corner2.x), Math.max(corner1.y,corner2.y));
+		}
+		public Shape(Shape shape) {
+			this.type    = shape.type;
+			this.center  = shape.center==null ? null : new Point(shape.center);
+			this.radius  = shape.radius;
+			this.corner1 = shape.corner1==null ? null : new Point(shape.corner1);
+			this.corner2 = shape.corner2==null ? null : new Point(shape.corner2);
 		}
 		
 		@Override

@@ -1,6 +1,7 @@
 package net.schwarzbaer.java.tools.imagemapeditor;
 
 import java.awt.BorderLayout;
+import java.awt.Point;
 import java.awt.event.ActionListener;
 import java.awt.image.BufferedImage;
 import java.io.File;
@@ -13,6 +14,7 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Vector;
@@ -20,6 +22,7 @@ import java.util.function.BiConsumer;
 
 import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
+import javax.swing.JButton;
 import javax.swing.JFileChooser;
 import javax.swing.JList;
 import javax.swing.JMenu;
@@ -35,6 +38,7 @@ import javax.swing.event.ListDataEvent;
 import javax.swing.event.ListDataListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
+import net.schwarzbaer.gui.ContextMenu;
 import net.schwarzbaer.gui.FileChooser;
 import net.schwarzbaer.gui.StandardMainWindow;
 import net.schwarzbaer.gui.StandardMainWindow.DefaultCloseOperation;
@@ -47,6 +51,8 @@ public class ImageMapEditor {
 	private final JList<Area> areaList;
 	private MapImage mapImage;
 	private String suggestedHtmlOutFileName;
+	private Area clickedArea;
+	private int clickedAreaListIndex;
 
 	public static void main(String[] args) {
 		try { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()); }
@@ -58,10 +64,11 @@ public class ImageMapEditor {
 		new ImageMapEditor(title,mapImage,areas,suggestedHtmlOutFileName,false).initialize();
 	}
 	
+	//  OK : add / remove area
+	//  OK : edit title & onclick
 	//  OK : selecting in AreaList  -> highlighting in EditorView
 	// TODO: selecting in AreaList <-  highlighting in EditorView
 	// TODO: switch shape type of area
-	// TODO: add / remove area
 	// TODO: coloring in AreaList
 	
 	ImageMapEditor(String title, MapImage mapImage, Vector<Area> areas, String suggestedHtmlOutFileName, boolean asStandAloneApp) {
@@ -77,6 +84,107 @@ public class ImageMapEditor {
 		areaListScrollPane.setBorder(BorderFactory.createTitledBorder("List of Areas"));
 		
 		editorView = new EditorView(800,600,areaListModel);
+
+		JMenuItem miALCMEdit;
+		JMenuItem miALCMRemove;
+		JMenuItem miALCMRemoveSelected;
+		ContextMenu areaListContextMenu = new ContextMenu();
+		areaListContextMenu.addTo(areaList);
+		areaListContextMenu.add(createMenuItem("Add Circle", true, e->{
+			Area area = AreaDialog.CircleDialog.showAddDialog(mainWindow);
+			if (area==null) return;
+			areaListModel.add(area);
+			editorView.repaint();
+		}));
+		areaListContextMenu.add(createMenuItem("Add Rectangle", true, e->{
+			Area area = AreaDialog.RectDialog.showAddDialog(mainWindow);
+			if (area==null) return;
+			areaListModel.add(area);
+			editorView.repaint();
+		}));
+		areaListContextMenu.add(miALCMEdit = createMenuItem("Edit Area", true, e->{
+			if (clickedAreaListIndex == -1) return;
+			editArea(clickedArea);
+		}));
+		areaListContextMenu.add(miALCMRemove = createMenuItem("Remove Area", true, e->{
+			remove(clickedArea, clickedAreaListIndex);
+		}));
+		areaListContextMenu.add(miALCMRemoveSelected = createMenuItem("Remove Selected Areas", true, e->{
+			int[] indices = areaList.getSelectedIndices();
+			if (indices.length==0) return;
+			
+			String message = String.format("Do you really want to delete following %d areas?%n", indices.length);
+			for (int index:indices)
+				message += String.format("   [%d] %s%n", index+1, areaListModel.getElementAt(index));
+			
+			int result = JOptionPane.showConfirmDialog(mainWindow, message, "Are You Sure?", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
+			if (result!=JOptionPane.YES_OPTION) return;
+			
+			areaListModel.remove(indices);
+			editorView.repaint();
+		}));
+		
+		clickedArea = null;
+		clickedAreaListIndex = -1;
+		areaListContextMenu.addContextMenuInvokeListener((comp,x,y)->{
+			clickedAreaListIndex = areaList.locationToIndex(new Point(x,y));
+			clickedArea = clickedAreaListIndex>=0 && clickedAreaListIndex<areaListModel.getSize() ? areaListModel.getElementAt(clickedAreaListIndex) : null;
+			
+			miALCMEdit  .setText   (clickedArea==null ?   "Edit Area" : String.format(  "Edit [%d] %s", clickedAreaListIndex+1, clickedArea.toString()));
+			miALCMEdit  .setEnabled(clickedArea!=null);
+			
+			miALCMRemove.setText   (clickedArea==null ? "Remove Area" : String.format("Remove [%d] %s", clickedAreaListIndex+1, clickedArea.toString()));
+			miALCMRemove.setEnabled(clickedArea!=null);
+			
+			int[] indices = areaList.getSelectedIndices();
+			miALCMRemoveSelected.setText   (indices.length==0 ? "Remove Selected Areas" : String.format("Remove %d Selected Areas", indices.length));
+			miALCMRemoveSelected.setEnabled(indices.length>0);
+		});
+		
+		
+		JMenuItem miEVCMAddCircle, miEVCMAddRectangle, miEVCMEdit, miEVCMRemove;
+		EditorView.ContextMenu editorViewContextMenu = editorView.createContextMenu();
+		editorViewContextMenu.add(miEVCMAddCircle = createMenuItem("Add Circle", true, e->{
+			
+			Point center = new Point();
+			center.x = Math.round( editorViewContextMenu.clickedPos.x );
+			center.y = Math.round( editorViewContextMenu.clickedPos.y );
+			
+			Area area = AreaDialog.CircleDialog.showAddDialog(mainWindow, center, 10);
+			if (area==null) return;
+			
+			areaListModel.add(area);
+			editorView.repaint();
+		}));
+		editorViewContextMenu.add(miEVCMAddRectangle = createMenuItem("Add Rectangle", true, e->{
+			
+			Point center = new Point();
+			center.x = Math.round( editorViewContextMenu.clickedPos.x );
+			center.y = Math.round( editorViewContextMenu.clickedPos.y );
+			
+			Area area = AreaDialog.RectDialog.showAddDialog(mainWindow, center, 15, 10);
+			if (area==null) return;
+			
+			areaListModel.add(area);
+			editorView.repaint();
+		}));
+		editorViewContextMenu.add(miEVCMEdit = createMenuItem("Edit Area", true, e->{
+			editArea(editorViewContextMenu.clickedArea);
+		}));
+		editorViewContextMenu.add(miEVCMRemove = createMenuItem("Remove Area", true, e->{
+			remove(editorViewContextMenu.clickedArea, -1);
+		}));
+		
+		editorViewContextMenu.addInvokeListener(()->{
+			boolean viewStateOK = editorView.isViewStateOK();
+			miEVCMAddCircle   .setEnabled(viewStateOK);
+			miEVCMAddRectangle.setEnabled(viewStateOK);
+			Area area = editorViewContextMenu.clickedArea;
+			miEVCMEdit  .setText   (area==null ?   "Edit Area" : String.format(  "Edit %s", area.toString()));
+			miEVCMEdit  .setEnabled(area!=null);
+			miEVCMRemove.setText   (area==null ? "Remove Area" : String.format("Remove %s", area.toString()));
+			miEVCMRemove.setEnabled(area!=null);
+		});
 		
 		areaList.addListSelectionListener(e -> {
 			int[] arr = areaList.getSelectedIndices();
@@ -146,6 +254,43 @@ public class ImageMapEditor {
 		mainWindow.startGUI(contentPane,menuBar);
 	}
 
+	private void remove(Area area, int index) {
+		if (area==null)
+			return;
+		
+		String message;
+		if (index>=0)
+			message = String.format("Do you really want to delete area %s at position %d?", area.toString(), index);
+		else
+			message = String.format("Do you really want to delete area %s?", area.toString());
+		
+		int result = JOptionPane.showConfirmDialog(mainWindow, message, "Are You Sure?", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
+		if (result!=JOptionPane.YES_OPTION) return;
+		
+		areaListModel.remove(area);
+		editorView.repaint();
+	}
+
+	private void editArea(Area area) {
+		if (area==null)
+			return;
+		
+		boolean changed = false;
+		switch (area.shape.type) {
+		case Circle:
+			changed = AreaDialog.CircleDialog.showEditDialog(mainWindow, area);
+			break;
+		case Rect:
+			changed = AreaDialog.RectDialog.showEditDialog(mainWindow, area);
+			break;
+		}
+		
+		if (!changed) return;
+		
+		areaListModel.fireContentsChangedEvent(clickedAreaListIndex, clickedAreaListIndex);
+		editorView.repaint();
+	}
+
 	private void writeToHTML(File file, boolean completeHTML) {
 		try (PrintWriter htmlOut = new PrintWriter(new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
 			
@@ -204,8 +349,15 @@ public class ImageMapEditor {
 		
 	}
 
-	private static JMenuItem createMenuItem(String title, boolean isEnabled, ActionListener al) {
+	static JMenuItem createMenuItem(String title, boolean isEnabled, ActionListener al) {
 		JMenuItem comp = new JMenuItem(title);
+		comp.setEnabled(isEnabled);
+		if (al!=null) comp.addActionListener(al);
+		return comp;
+	}
+
+	static JButton createButton(String title, boolean isEnabled, ActionListener al) {
+		JButton comp = new JButton(title);
 		comp.setEnabled(isEnabled);
 		if (al!=null) comp.addActionListener(al);
 		return comp;
@@ -218,7 +370,6 @@ public class ImageMapEditor {
 			editorView.reset();
 	}
 	
-	@SuppressWarnings("unused")
 	static class AreaListModel implements ListModel<Area>, Iterable<Area> {
 		
 		private final Vector<ListDataListener> listDataListeners;
@@ -258,6 +409,28 @@ public class ImageMapEditor {
 		public void add(Area area) {
 			data.add(area);
 			fireIntervalAddedEvent(data.size()-1, data.size()-1);
+		}
+		
+		public void remove(Area area) {
+			remove(data.indexOf(area));
+		}
+		
+		public void remove(int index) {
+			if (index<0 || index>=data.size()) return;
+			data.remove(index);
+			fireIntervalRemovedEvent(index, index);
+		}
+		
+		public void remove(int[] indices) {
+			Arrays.sort(indices);
+			for (int i=indices.length-1; i>=0; i--)
+				remove(indices[i]);
+		}
+		
+		public void notifyAreaChanged(Area area) {
+			int index = data.indexOf(area);
+			if (index<0 || index>=data.size()) return;
+			fireContentsChangedEvent(index, index);
 		}
 		
 		private void fireContentsChangedEvent(int first, int last) { fireEvent(first, last, ListDataEvent.CONTENTS_CHANGED, ListDataListener::contentsChanged); }
