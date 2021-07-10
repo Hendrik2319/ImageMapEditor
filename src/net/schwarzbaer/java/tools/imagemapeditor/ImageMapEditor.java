@@ -13,6 +13,7 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Vector;
 import java.util.function.BiConsumer;
@@ -57,6 +58,12 @@ public class ImageMapEditor {
 		new ImageMapEditor(title,mapImage,areas,suggestedHtmlOutFileName,false).initialize();
 	}
 	
+	//  OK : selecting in AreaList  -> highlighting in EditorView
+	// TODO: selecting in AreaList <-  highlighting in EditorView
+	// TODO: switch shape type of area
+	// TODO: add / remove area
+	// TODO: coloring in AreaList
+	
 	ImageMapEditor(String title, MapImage mapImage, Vector<Area> areas, String suggestedHtmlOutFileName, boolean asStandAloneApp) {
 		this.mapImage = mapImage;
 		this.suggestedHtmlOutFileName = suggestedHtmlOutFileName;
@@ -70,6 +77,15 @@ public class ImageMapEditor {
 		areaListScrollPane.setBorder(BorderFactory.createTitledBorder("List of Areas"));
 		
 		editorView = new EditorView(800,600,areaListModel);
+		
+		areaList.addListSelectionListener(e -> {
+			int[] arr = areaList.getSelectedIndices();
+			HashSet<Integer> indices = new HashSet<>();
+			for (int index:arr)
+				indices.add(index);
+			areaListModel.setSelectedIndices(indices);
+			editorView.repaint();
+		});
 		
 		JPanel leftPanel = new JPanel(new BorderLayout(3,3));
 		leftPanel.add(areaListScrollPane,BorderLayout.CENTER);
@@ -183,10 +199,8 @@ public class ImageMapEditor {
 			
 		}
 		catch (FileNotFoundException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		// TODO Auto-generated method stub
 		
 	}
 
@@ -209,16 +223,34 @@ public class ImageMapEditor {
 		
 		private final Vector<ListDataListener> listDataListeners;
 		private final Vector<Area> data;
+		private HashSet<Integer> selectedIndices;
 		
 		AreaListModel() { this(null); }
 		AreaListModel(Vector<Area> data) {
 			listDataListeners = new Vector<>();
+			selectedIndices = null;
 			this.data = data==null ? new Vector<>() : new Vector<>(data);
 		}
 				
 		@Override public void    addListDataListener(ListDataListener l) { listDataListeners.   add(l); }
 		@Override public void removeListDataListener(ListDataListener l) { listDataListeners.remove(l); }
 		
+		public void setSelectedIndices(HashSet<Integer> selectedIndices) {
+			this.selectedIndices = selectedIndices;
+		}
+		
+		public interface AreaAction {
+			void apply(Area area, boolean isSelected);
+		}
+		
+		public void forEach(AreaAction action) {
+			for (int i=0; i<data.size(); i++) {
+				Area area = data.get(i);
+				boolean isSelected = selectedIndices!=null && selectedIndices.contains(i);
+				action.apply(area,isSelected);
+			}
+		}
+
 		@Override public Iterator<Area> iterator() { return data.iterator(); }
 		@Override public int getSize() { return data.size(); }
 		@Override public Area getElementAt(int index) { return data.get(index); }

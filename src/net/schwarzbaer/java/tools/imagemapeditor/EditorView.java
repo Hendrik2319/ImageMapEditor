@@ -22,8 +22,8 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 	private final AreaListModel areaListModel;
 	private AreaEditing areaEditing;
 
-	public EditorView(int width, int height, AreaListModel areaListModel) { this(null, width, height, areaListModel); }
-	public EditorView(BufferedImage image, int width, int height, AreaListModel areaListModel) {
+	EditorView(int width, int height, AreaListModel areaListModel) { this(null, width, height, areaListModel); }
+	EditorView(BufferedImage image, int width, int height, AreaListModel areaListModel) {
 		this.image = image;
 		this.areaListModel = areaListModel;
 		areaEditing = null;
@@ -34,7 +34,9 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 		activateEditorMode();
 	}
 	
-	public void setImage(BufferedImage image) {
+	
+	
+	void setImage(BufferedImage image) {
 		this.image = image;
 		reset();
 	}
@@ -407,9 +409,15 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 
 	private void paintAreas(Graphics2D g2, int x0, int y0) {
 		g2.setColor(COLOR_AREA);
-		for (Area area : areaListModel)
-			if (areaEditing==null || areaEditing.area!=area)
+		areaListModel.forEach((area,isSelected)->{
+			if (!isSelected && (areaEditing==null || areaEditing.area!=area))
 				paintArea(g2, x0, y0, area);
+		});
+		g2.setColor(COLOR_HIGHLIGHTED_AREA);
+		areaListModel.forEach((area,isSelected)->{
+			if (isSelected && (areaEditing==null || areaEditing.area!=area))
+				paintArea(g2, x0, y0, area);
+		});
 		if (areaEditing!=null) {
 			g2.setColor(COLOR_HIGHLIGHTED_AREA);
 			paintArea(g2, x0, y0, areaEditing.area);
