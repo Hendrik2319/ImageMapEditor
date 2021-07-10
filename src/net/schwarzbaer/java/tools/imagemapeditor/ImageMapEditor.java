@@ -19,6 +19,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Vector;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 
 import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
@@ -64,7 +65,7 @@ public class ImageMapEditor {
 		new ImageMapEditor(title,mapImage,areas,suggestedHtmlOutFileName,false).initialize();
 	}
 	
-	// TODO: switch shape type of area
+	//  OK : switch shape type of area
 	//  OK : add / remove area
 	//  OK : edit title & onclick
 	//  OK : selecting in AreaList  -> highlighting in EditorView
@@ -88,6 +89,7 @@ public class ImageMapEditor {
 		JMenuItem miALCMEdit;
 		JMenuItem miALCMRemove;
 		JMenuItem miALCMRemoveSelected;
+		JMenuItem miALCMSwitch;
 		ContextMenu areaListContextMenu = new ContextMenu();
 		areaListContextMenu.addTo(areaList);
 		areaListContextMenu.add(createMenuItem("Add Circle", true, e->{
@@ -102,9 +104,13 @@ public class ImageMapEditor {
 			areaListModel.add(area);
 			editorView.repaint();
 		}));
+		areaListContextMenu.add(miALCMSwitch = createMenuItem("Switch Shape Type", true, e->{
+			if (clickedAreaListIndex == -1) return;
+			switchShapeType(clickedArea,clickedAreaListIndex);
+		}));
 		areaListContextMenu.add(miALCMEdit = createMenuItem("Edit Area", true, e->{
 			if (clickedAreaListIndex == -1) return;
-			editArea(clickedArea);
+			editArea(clickedArea,clickedAreaListIndex);
 		}));
 		areaListContextMenu.add(miALCMRemove = createMenuItem("Remove Area", true, e->{
 			remove(clickedArea, clickedAreaListIndex);
@@ -130,6 +136,10 @@ public class ImageMapEditor {
 			clickedAreaListIndex = areaList.locationToIndex(new Point(x,y));
 			clickedArea = clickedAreaListIndex>=0 && clickedAreaListIndex<areaListModel.getSize() ? areaListModel.getElementAt(clickedAreaListIndex) : null;
 			
+			String targetTypeStr = getSwitchTargetType(clickedArea);
+			miALCMSwitch.setText   (clickedArea==null ? "Switch Shape Type" : String.format("Switch Shape Type of [%d] %s to %s", clickedAreaListIndex+1, clickedArea.toString(), targetTypeStr));
+			miALCMSwitch.setEnabled(clickedArea!=null);
+			
 			miALCMEdit  .setText   (clickedArea==null ?   "Edit Area" : String.format(  "Edit [%d] %s", clickedAreaListIndex+1, clickedArea.toString()));
 			miALCMEdit  .setEnabled(clickedArea!=null);
 			
@@ -142,7 +152,7 @@ public class ImageMapEditor {
 		});
 		
 		
-		JMenuItem miEVCMAddCircle, miEVCMAddRectangle, miEVCMEdit, miEVCMRemove;
+		JMenuItem miEVCMAddCircle, miEVCMAddRectangle, miEVCMEdit, miEVCMRemove, miEVCMSwitch;
 		EditorView.ContextMenu editorViewContextMenu = editorView.createContextMenu();
 		editorViewContextMenu.add(miEVCMAddCircle = createMenuItem("Add Circle", true, e->{
 			
@@ -168,8 +178,11 @@ public class ImageMapEditor {
 			areaListModel.add(area);
 			editorView.repaint();
 		}));
+		editorViewContextMenu.add(miEVCMSwitch = createMenuItem("Switch Shape Type", true, e->{
+			switchShapeType(editorViewContextMenu.clickedArea,-1);
+		}));
 		editorViewContextMenu.add(miEVCMEdit = createMenuItem("Edit Area", true, e->{
-			editArea(editorViewContextMenu.clickedArea);
+			editArea(editorViewContextMenu.clickedArea,-1);
 		}));
 		editorViewContextMenu.add(miEVCMRemove = createMenuItem("Remove Area", true, e->{
 			remove(editorViewContextMenu.clickedArea, -1);
@@ -180,6 +193,9 @@ public class ImageMapEditor {
 			miEVCMAddCircle   .setEnabled(viewStateOK);
 			miEVCMAddRectangle.setEnabled(viewStateOK);
 			Area area = editorViewContextMenu.clickedArea;
+			String targetTypeStr = getSwitchTargetType(area);
+			miEVCMSwitch.setText   (area==null ? "Switch Shape Type" : String.format("Switch Shape Type of %s to %s", area.toString(), targetTypeStr));
+			miEVCMSwitch.setEnabled(area!=null);
 			miEVCMEdit  .setText   (area==null ?   "Edit Area" : String.format(  "Edit %s", area.toString()));
 			miEVCMEdit  .setEnabled(area!=null);
 			miEVCMRemove.setText   (area==null ? "Remove Area" : String.format("Remove %s", area.toString()));
@@ -271,23 +287,51 @@ public class ImageMapEditor {
 		editorView.repaint();
 	}
 
-	private void editArea(Area area) {
+	private String getSwitchTargetType(Area area) {
+		String targetTypeStr = null;
+		if (area!=null)
+			switch (area.shape.type) {
+			case Circle: targetTypeStr = "Rectangle"; break;
+			case Rect  : targetTypeStr = "Circle"   ; break;
+			}
+		return targetTypeStr;
+	}
+
+	private void switchShapeType(Area area, int index) {
+		changeArea(area, index, this::switchShapeType);
+	}
+
+	private boolean switchShapeType(Area area) {
+		boolean changed = false;
+		switch (area.shape.type) {
+		case Circle: changed = area.switchToShapeType(Area.Shape.Type.Rect  ); break;
+		case Rect  : changed = area.switchToShapeType(Area.Shape.Type.Circle); break;
+		}
+		return changed;
+	}
+
+	private void editArea(Area area, int index) {
+		changeArea(area, index, this::editArea);
+	}
+
+	private boolean editArea(Area area) {
+		boolean changed = false;
+		switch (area.shape.type) {
+		case Circle: changed = AreaDialog.CircleDialog.showEditDialog(mainWindow, area); break;
+		case Rect  : changed = AreaDialog.  RectDialog.showEditDialog(mainWindow, area); break;
+		}
+		return changed;
+	}
+
+	private void changeArea(Area area, int index, Function<Area,Boolean> action) {
 		if (area==null)
 			return;
 		
-		boolean changed = false;
-		switch (area.shape.type) {
-		case Circle:
-			changed = AreaDialog.CircleDialog.showEditDialog(mainWindow, area);
-			break;
-		case Rect:
-			changed = AreaDialog.RectDialog.showEditDialog(mainWindow, area);
-			break;
-		}
-		
+		boolean changed = action.apply(area);
 		if (!changed) return;
 		
-		areaListModel.fireContentsChangedEvent(clickedAreaListIndex, clickedAreaListIndex);
+		if (index<0) areaListModel.notifyAreaChanged(area);
+		else         areaListModel.fireContentsChangedEvent(index, index);
 		editorView.repaint();
 	}
 

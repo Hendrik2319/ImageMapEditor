@@ -2,6 +2,8 @@ package net.schwarzbaer.java.tools.imagemapeditor;
 
 import java.awt.Point;
 
+import net.schwarzbaer.java.tools.imagemapeditor.Area.Shape.Type;
+
 public class Area {
 	String title;
 	String onclick;
@@ -21,6 +23,16 @@ public class Area {
 		shape = new Shape(area.shape);
 		title = area.title;
 		onclick = area.onclick;
+	}
+
+	public boolean switchToShapeType(Type type) {
+		if (shape.type==type) return false;
+		
+		Shape newShape = shape.derive(type);
+		if (newShape==null) return false;
+		
+		shape = newShape;
+		return true;
 	}
 
 	@Override
@@ -62,6 +74,36 @@ public class Area {
 			this.corner2 = shape.corner2==null ? null : new Point(shape.corner2);
 		}
 		
+		public Shape derive(Type type) {
+			switch (type) {
+			
+			case Circle: {
+				if (this.type!=Type.Rect) return null;
+				float cX = (corner1.x+corner2.x+1)/2.0f;
+				float cY = (corner1.y+corner2.y+1)/2.0f;
+				float radius = (float) Math.sqrt((corner1.x-cX)*(corner1.x-cX)+(corner1.y-cY)*(corner1.y-cY));
+				Point center = new Point();
+				center.x = Math.round(cX);
+				center.y = Math.round(cY);
+				return new Shape(center, Math.round(radius));
+			}
+				
+			case Rect: {
+				if (this.type!=Type.Circle) return null;
+				double dX = Math.cos(Math.PI/6)*radius;
+				double dY = Math.sin(Math.PI/6)*radius;
+				Point corner1 = new Point();
+				corner1.x = (int) Math.floor(center.x-dX);
+				corner1.y = (int) Math.floor(center.y-dY);
+				Point corner2 = new Point();
+				corner2.x = (int) Math.ceil(center.x+dX);
+				corner2.y = (int) Math.ceil(center.y+dY);
+				return new Shape(corner1, corner2);
+			}
+			}
+			
+			throw new IllegalStateException();
+		}
 		@Override
 		public String toString() {
 			switch (type) {
