@@ -64,11 +64,11 @@ public class ImageMapEditor {
 		new ImageMapEditor(title,mapImage,areas,suggestedHtmlOutFileName,false).initialize();
 	}
 	
+	// TODO: switch shape type of area
 	//  OK : add / remove area
 	//  OK : edit title & onclick
 	//  OK : selecting in AreaList  -> highlighting in EditorView
 	// TODO: selecting in AreaList <-  highlighting in EditorView
-	// TODO: switch shape type of area
 	// TODO: coloring in AreaList
 	
 	ImageMapEditor(String title, MapImage mapImage, Vector<Area> areas, String suggestedHtmlOutFileName, boolean asStandAloneApp) {
