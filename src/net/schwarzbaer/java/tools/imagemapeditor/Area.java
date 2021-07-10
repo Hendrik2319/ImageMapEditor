@@ -3,9 +3,9 @@ package net.schwarzbaer.java.tools.imagemapeditor;
 import java.awt.Point;
 
 public class Area {
-	public String title;
-	public String onclick;
-	public Area.Shape shape;
+	String title;
+	String onclick;
+	Area.Shape shape;
 	
 	public Area(Area.Shape shape, String title, String onclick) {
 		this.shape = shape;
@@ -19,13 +19,16 @@ public class Area {
 	}
 
 	public static class Shape {
-		public enum Type { Rect, Circle }
+		public enum Type {
+			Rect, Circle;
+			String toHtmlValue() { return name().toLowerCase(); }
+		}
 		
-		public final Shape.Type type;
-		public final Point center;
-		public       int   radius;
-		public final Point corner1;
-		public final Point corner2;
+		final Shape.Type type;
+		final Point center;
+		      int   radius;
+		final Point corner1;
+		final Point corner2;
 		
 		public Shape(Point center, int radius) {
 			type = Type.Circle;
@@ -47,6 +50,13 @@ public class Area {
 			switch (type) {
 			case Circle: return String.format("Circle(%d,%d|%d)", center.x, center.y, radius);
 			case Rect  : return String.format("Rect(%d,%d|%d,%d)", corner1.x, corner1.y, corner2.x, corner2.y);
+			}
+			throw new IllegalStateException();
+		}
+		public String toCoordsValue() {
+			switch (type) {
+			case Circle: return String.format("%d,%d,%d", center.x, center.y, radius);
+			case Rect  : return String.format("%d,%d,%d,%d", corner1.x, corner1.y, corner2.x, corner2.y);
 			}
 			throw new IllegalStateException();
 		}

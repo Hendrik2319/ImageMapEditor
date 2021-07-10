@@ -4,9 +4,15 @@ import java.awt.BorderLayout;
 import java.awt.event.ActionListener;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.Vector;
 import java.util.function.BiConsumer;
@@ -28,6 +34,7 @@ import javax.swing.event.ListDataEvent;
 import javax.swing.event.ListDataListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
+import net.schwarzbaer.gui.FileChooser;
 import net.schwarzbaer.gui.StandardMainWindow;
 import net.schwarzbaer.gui.StandardMainWindow.DefaultCloseOperation;
 
@@ -35,28 +42,29 @@ public class ImageMapEditor {
 
 	private final StandardMainWindow mainWindow;
 	private final EditorView editorView;
+	private final AreaListModel areaListModel;
 	private final JList<Area> areaList;
 	private MapImage mapImage;
+	private String suggestedHtmlOutFileName;
 
 	public static void main(String[] args) {
 		try { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()); }
 		catch (ClassNotFoundException | InstantiationException | IllegalAccessException | UnsupportedLookAndFeelException e) {}
-		new ImageMapEditor("Image Map Editor",null,null,true).initialize();
+		new ImageMapEditor("Image Map Editor",null,null,null,true).initialize();
 	}
 	
-	public static void show(String title                   ) { show(title, null    , null); }
-	public static void show(String title, MapImage mapImage) { show(title, mapImage, null); }
-	public static void show(String title, MapImage mapImage, Vector<Area> areas) {
-		new ImageMapEditor(title,mapImage,areas,false).initialize();
+	public static void show(String title, MapImage mapImage, Vector<Area> areas, String suggestedHtmlOutFileName) {
+		new ImageMapEditor(title,mapImage,areas,suggestedHtmlOutFileName,false).initialize();
 	}
 	
-	ImageMapEditor(String title, MapImage mapImage, Vector<Area> areas, boolean asStandAloneApp) {
+	ImageMapEditor(String title, MapImage mapImage, Vector<Area> areas, String suggestedHtmlOutFileName, boolean asStandAloneApp) {
 		this.mapImage = mapImage;
+		this.suggestedHtmlOutFileName = suggestedHtmlOutFileName;
 		
 		DefaultCloseOperation closeOp = asStandAloneApp ? DefaultCloseOperation.EXIT_ON_CLOSE : DefaultCloseOperation.DISPOSE_ON_CLOSE;
 		mainWindow = new StandardMainWindow(title, closeOp);
 		
-		AreaListModel areaListModel = new AreaListModel(areas);
+		areaListModel = new AreaListModel(areas);
 		areaList = new JList<>(areaListModel);
 		JScrollPane areaListScrollPane = new JScrollPane(areaList);
 		areaListScrollPane.setBorder(BorderFactory.createTitledBorder("List of Areas"));
@@ -72,13 +80,22 @@ public class ImageMapEditor {
 		
 		JMenuBar menuBar = new JMenuBar();
 		
+		FileChooser htmlFileChooser = new FileChooser("HTML-File", "html");
+		
 		JMenu fileMenu = menuBar.add(new JMenu("File"));
 		fileMenu.add(createMenuItem("Write HTML ...", true, e->{
-			// TODO
+			if (this.suggestedHtmlOutFileName!=null) htmlFileChooser.suggestFileName(this.suggestedHtmlOutFileName);
+			if (htmlFileChooser.showSaveDialog(mainWindow)!=JFileChooser.APPROVE_OPTION) return;
+			writeToHTML(htmlFileChooser.getSelectedFile(),true);
+			this.suggestedHtmlOutFileName = null;
 		}));
 		fileMenu.add(createMenuItem("Write HTML (reduced) ...", true, e->{
-			// TODO
+			if (this.suggestedHtmlOutFileName!=null) htmlFileChooser.suggestFileName(this.suggestedHtmlOutFileName);
+			if (htmlFileChooser.showSaveDialog(mainWindow)!=JFileChooser.APPROVE_OPTION) return;
+			writeToHTML(htmlFileChooser.getSelectedFile(),false);
+			this.suggestedHtmlOutFileName = null;
 		}));
+		
 		if (asStandAloneApp) {
 			fileMenu.addSeparator();
 			fileMenu.add(createMenuItem("Quit",true,e->{ System.exit(0); }));
@@ -113,6 +130,66 @@ public class ImageMapEditor {
 		mainWindow.startGUI(contentPane,menuBar);
 	}
 
+	private void writeToHTML(File file, boolean completeHTML) {
+		try (PrintWriter htmlOut = new PrintWriter(new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
+			
+			if (completeHTML) {
+				htmlOut.println("<!DOCTYPE html>");
+				htmlOut.println("<html>");
+				htmlOut.println("<head>");
+				htmlOut.printf ("    <title>%s</title>%n", file.getName());
+				htmlOut.println("    <meta http-equiv=\"Content-Type\" content=\"text/html;charset=UTF-8\">");
+				htmlOut.println("</head>");
+				htmlOut.println("<body>");
+			}
+			
+			if (mapImage!=null) {
+				String url = null;
+				switch (mapImage.type) {
+				case File:
+					System.out.printf("Convert File: \"%s\"%n", mapImage.file.getAbsolutePath());
+					URI uri = mapImage.file.toURI();
+					System.out.printf("      to URI: \"%s\"%n", uri.toString());
+					URL url_;
+					try {
+						url_ = uri.toURL();
+						System.out.printf("      to URL: \"%s\"%n", url_.toString());
+					} catch (MalformedURLException e) {
+						System.err.printf("      to URL: --> MalformedURLException: %s%n", e.getMessage());
+						url_ = null;
+					}
+					if (url_!=null)
+						url = url_.toString();
+					break;
+				case URL: url = mapImage.url; break;
+				}
+				htmlOut.printf ("<img border=\"0\" src=\"%s\" usemap=\"#map\" >%n", url);
+			}
+			
+			htmlOut.println("<map name=\"map\">");
+			areaListModel.forEach(area->{
+				String type = area.shape.type.toHtmlValue();
+				String coords = area.shape.toCoordsValue();
+				String title   = area.title  .replace("\\", "\\\\").replace("\"", "\\\"");
+				String onclick = area.onclick.replace("\\", "\\\\").replace("\"", "\\\"");
+				htmlOut.printf("	<area shape=\"%s\" coords=\"%s\" title=\"%s\" onclick=\"%s\">%n", type, coords, title, onclick);
+			});
+			htmlOut.println("</map>");
+			
+			if (completeHTML) {
+				htmlOut.println("</body>");
+				htmlOut.println("</html>");
+			}
+			
+		}
+		catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		// TODO Auto-generated method stub
+		
+	}
+
 	private static JMenuItem createMenuItem(String title, boolean isEnabled, ActionListener al) {
 		JMenuItem comp = new JMenuItem(title);
 		comp.setEnabled(isEnabled);
@@ -123,6 +200,8 @@ public class ImageMapEditor {
 	private void initialize() {
 		if (mapImage!=null)
 			editorView.setImage(mapImage.image);
+		else
+			editorView.reset();
 	}
 	
 	@SuppressWarnings("unused")

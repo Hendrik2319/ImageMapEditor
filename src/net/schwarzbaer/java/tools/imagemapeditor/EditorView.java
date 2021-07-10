@@ -10,7 +10,6 @@ import java.awt.event.MouseWheelEvent;
 import java.awt.image.BufferedImage;
 
 import net.schwarzbaer.gui.ZoomableCanvas;
-import net.schwarzbaer.java.tools.imagemapeditor.Area.Shape;
 import net.schwarzbaer.java.tools.imagemapeditor.ImageMapEditor.AreaListModel;
 
 class EditorView extends ZoomableCanvas<EditorView.ViewState> {
@@ -167,21 +166,27 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 			float x,y;
 			boolean isVisible;
 			
+			HandlePoint(Point p) { this(p.x,p.y); }
+			HandlePoint(Point p, boolean isVisible) { this(p.x,p.y,isVisible); }
+			HandlePoint() { this(0,0,true); }
 			HandlePoint(float x, float y) { this(x,y,true); }
 			HandlePoint(float x, float y, boolean isVisible) {
 				this.x = x;
 				this.y = y;
 				this.isVisible = isVisible;
 			}
-			HandlePoint(Point p) { this(p.x,p.y); }
-			HandlePoint(Point p, boolean isVisible) { this(p.x,p.y,isVisible); }
+			
+			void set(float x, float y) {
+				this.x = x;
+				this.y = y;
+			}
 		}
 
 		static class CircleEditing extends AreaEditing {
 			private static final int HPINDEX_CENTER = 0;
 			private static final int HPINDEX_RADIUS = 1;
-			private float dragDeltaX;
-			private float dragDeltaY;
+			private float dragOffsetX;
+			private float dragOffsetY;
 			
 			CircleEditing(Area area) {
 				super(area, new HandlePoint(area.shape.center), new HandlePoint(area.shape.center, false));
@@ -214,8 +219,8 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 
 			@Override protected void startDragging(float pX, float pY) {
 				if (highlightedHPindex==HPINDEX_CENTER) {
-					dragDeltaX = pX-area.shape.center.x;
-					dragDeltaY = pY-area.shape.center.y;
+					dragOffsetX = pX-area.shape.center.x;
+					dragOffsetY = pY-area.shape.center.y;
 				}
 			}
 
@@ -226,8 +231,8 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 			@Override protected void dragging(float pX, float pY) {
 				switch (highlightedHPindex) {
 				case HPINDEX_CENTER:
-					area.shape.center.x = Math.round( pX-dragDeltaX );
-					area.shape.center.y = Math.round( pY-dragDeltaY );
+					area.shape.center.x = Math.round( pX-dragOffsetX );
+					area.shape.center.y = Math.round( pY-dragOffsetY );
 					handlePoints[HPINDEX_CENTER].x = area.shape.center.x;
 					handlePoints[HPINDEX_CENTER].y = area.shape.center.y;
 					handlePoints[HPINDEX_RADIUS].isVisible = false;
@@ -252,32 +257,39 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 			private static final int HPINDEX_C12 = 2;
 			private static final int HPINDEX_C22 = 3;
 			private static final int HPINDEX_C21 = 4;
+			private float dragOffsetX;
+			private float dragOffsetY;
 			
 			RectEditing(Area area) {
-				super(area, createHPs(area.shape));
+				super(area, createHPs(area));
 			}
 
-			private static HandlePoint[] createHPs(Shape shape) {
-				int c1X = shape.corner1.x;
-				int c1Y = shape.corner1.y;
-				int c2X = shape.corner2.x;
-				int c2Y = shape.corner2.y;
+			private static HandlePoint[] createHPs(Area area) {
+				return updateHandlePoints( area, new HandlePoint[] {
+					new HandlePoint(), new HandlePoint(), new HandlePoint(), new HandlePoint(), new HandlePoint()
+				});
+			}
+
+			private static HandlePoint[] updateHandlePoints(Area area, HandlePoint[] handlePoints) {
+				int c1X = area.shape.corner1.x;
+				int c1Y = area.shape.corner1.y;
+				int c2X = area.shape.corner2.x+1;
+				int c2Y = area.shape.corner2.y+1;
 				float mX = (c1X+c2X)/2.0f;
 				float mY = (c1Y+c2Y)/2.0f;
-				return new HandlePoint[] {
-					new HandlePoint(mX,mY),
-					new HandlePoint(c1X,c1Y),
-					new HandlePoint(c1X,c2Y),
-					new HandlePoint(c2X,c2Y),
-					new HandlePoint(c2X,c1Y)
-				};
+				handlePoints[HPINDEX_CENTER].set(mX,mY);
+				handlePoints[HPINDEX_C11].set(c1X,c1Y);
+				handlePoints[HPINDEX_C12].set(c1X,c2Y);
+				handlePoints[HPINDEX_C22].set(c2X,c2Y);
+				handlePoints[HPINDEX_C21].set(c2X,c1Y);
+				return handlePoints;
 			}
 
 			public static DistanceResult computeDistanceToRect(Area area, float pX, float pY) {
 				int c1X = area.shape.corner1.x;
 				int c1Y = area.shape.corner1.y;
-				int c2X = area.shape.corner2.x;
-				int c2Y = area.shape.corner2.y;
+				int c2X = area.shape.corner2.x+1;
+				int c2Y = area.shape.corner2.y+1;
 				double mX = (c1X+c2X)/2.0;
 				double mY = (c1Y+c2Y)/2.0;
 				double d = Math.sqrt((mX-pX)*(mX-pX)+(mY-pY)*(mY-pY));
@@ -291,8 +303,8 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 			@Override void setMousePoint(float pX, float pY, float minDist) {
 				int c1X = area.shape.corner1.x;
 				int c1Y = area.shape.corner1.y;
-				int c2X = area.shape.corner2.x;
-				int c2Y = area.shape.corner2.y;
+				int c2X = area.shape.corner2.x+1;
+				int c2Y = area.shape.corner2.y+1;
 				double mX = (c1X+c2X)/2.0;
 				double mY = (c1Y+c2Y)/2.0;
 				double d1, d = Math.sqrt((mX-pX)*(mX-pX)+(mY-pY)*(mY-pY)); highlightedHPindex = minDist<d ? -1 : HPINDEX_CENTER;
@@ -303,15 +315,51 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 			}
 
 			@Override protected void startDragging(float pX, float pY) {
-				// TODO Auto-generated method stub
+				int c1X = area.shape.corner1.x;
+				int c1Y = area.shape.corner1.y;
+				int c2X = area.shape.corner2.x+1;
+				int c2Y = area.shape.corner2.y+1;
+				switch (highlightedHPindex) {
+				case HPINDEX_CENTER:
+				case HPINDEX_C11: dragOffsetX = pX-c1X; dragOffsetY = pY-c1Y; break;
+				case HPINDEX_C12: dragOffsetX = pX-c1X; dragOffsetY = pY-c2Y; break;
+				case HPINDEX_C22: dragOffsetX = pX-c2X; dragOffsetY = pY-c2Y; break;
+				case HPINDEX_C21: dragOffsetX = pX-c2X; dragOffsetY = pY-c1Y; break;
+				}
 			}
 
 			@Override protected void stopDragging(float pX, float pY) {
-				// TODO Auto-generated method stub
+				dragging(pX, pY);
 			}
 
 			@Override protected void dragging(float pX, float pY) {
-				// TODO Auto-generated method stub
+				switch (highlightedHPindex) {
+				case HPINDEX_CENTER: 
+					int w = area.shape.corner2.x-area.shape.corner1.x;
+					int h = area.shape.corner2.y-area.shape.corner1.y;
+					area.shape.corner1.x = Math.round(pX-dragOffsetX);
+					area.shape.corner1.y = Math.round(pY-dragOffsetY);
+					area.shape.corner2.x = area.shape.corner1.x + w;
+					area.shape.corner2.y = area.shape.corner1.y + h;
+					break;
+				case HPINDEX_C11:
+					area.shape.corner1.x = Math.min( Math.round(pX-dragOffsetX  ), area.shape.corner2.x );
+					area.shape.corner1.y = Math.min( Math.round(pY-dragOffsetY  ), area.shape.corner2.y );
+					break;
+				case HPINDEX_C12:
+					area.shape.corner1.x = Math.min( Math.round(pX-dragOffsetX  ), area.shape.corner2.x );
+					area.shape.corner2.y = Math.max( Math.round(pY-dragOffsetY-1), area.shape.corner1.y );
+					break;
+				case HPINDEX_C22:
+					area.shape.corner2.x = Math.max( Math.round(pX-dragOffsetX-1), area.shape.corner1.x );
+					area.shape.corner2.y = Math.max( Math.round(pY-dragOffsetY-1), area.shape.corner1.y );
+					break;
+				case HPINDEX_C21:
+					area.shape.corner2.x = Math.max( Math.round(pX-dragOffsetX-1), area.shape.corner1.x );
+					area.shape.corner1.y = Math.min( Math.round(pY-dragOffsetY  ), area.shape.corner2.y );
+					break;
+				}
+				updateHandlePoints(area, handlePoints);
 			}
 		}
 	}
@@ -368,20 +416,6 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 			paintHandlePoints(g2, x0, y0);
 		}
 	}
-	private void paintHandlePoints(Graphics2D g2, int x0, int y0) {
-		areaEditing.forEachPoint((hp,isHighlighted)->{
-			if (!hp.isVisible) return;
-			int hpX = viewState.convertPos_AngleToScreen_LongX(hp.x);
-			int hpY = viewState.convertPos_AngleToScreen_LatY (hp.y);
-			
-			int r = 3;
-			g2.setColor(isHighlighted ? Color.YELLOW : Color.GREEN);
-			g2.fillOval(x0+hpX-r, y0+hpY-r, 2*r+1, 2*r+1);
-			g2.setColor(COLOR_AXIS);
-			g2.drawOval(x0+hpX-r, y0+hpY-r, 2*r, 2*r);
-		});
-	}
-
 	private void paintArea(Graphics2D g2, int x0, int y0, Area area) {
 		if (area.shape==null) return;
 		
@@ -397,13 +431,26 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 		case Rect:
 			int c1X = viewState.convertPos_AngleToScreen_LongX(area.shape.corner1.x);
 			int c1Y = viewState.convertPos_AngleToScreen_LatY (area.shape.corner1.y);
-			int w  = viewState.convertLength_LengthToScreen((float) (area.shape.corner2.x-area.shape.corner1.x));
-			int h  = viewState.convertLength_LengthToScreen((float) (area.shape.corner2.y-area.shape.corner1.y));
+			int w  = viewState.convertLength_LengthToScreen((float) (area.shape.corner2.x-area.shape.corner1.x+1));
+			int h  = viewState.convertLength_LengthToScreen((float) (area.shape.corner2.y-area.shape.corner1.y+1));
 			g2.drawRect(x0+c1X, y0+c1Y, w, h);
 			break;
 		}
 	}
 	
+	private void paintHandlePoints(Graphics2D g2, int x0, int y0) {
+		areaEditing.forEachPoint((hp,isHighlighted)->{
+			if (!hp.isVisible) return;
+			int hpX = viewState.convertPos_AngleToScreen_LongX(hp.x);
+			int hpY = viewState.convertPos_AngleToScreen_LatY (hp.y);
+			
+			int r = 3;
+			g2.setColor(isHighlighted ? Color.YELLOW : Color.GREEN);
+			g2.fillOval(x0+hpX-r, y0+hpY-r, 2*r+1, 2*r+1);
+			g2.setColor(COLOR_AXIS);
+			g2.drawOval(x0+hpX-r, y0+hpY-r, 2*r, 2*r);
+		});
+	}
 	@Override
 	protected ViewState createViewState() {
 		return new ViewState();
