@@ -1,6 +1,8 @@
 package net.schwarzbaer.java.tools.imagemapeditor;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
 import java.awt.Point;
 import java.awt.event.ActionListener;
 import java.awt.image.BufferedImage;
@@ -32,6 +34,7 @@ import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.ListCellRenderer;
 import javax.swing.ListModel;
 import javax.swing.UIManager;
 import javax.swing.UnsupportedLookAndFeelException;
@@ -43,6 +46,7 @@ import net.schwarzbaer.gui.ContextMenu;
 import net.schwarzbaer.gui.FileChooser;
 import net.schwarzbaer.gui.StandardMainWindow;
 import net.schwarzbaer.gui.StandardMainWindow.DefaultCloseOperation;
+import net.schwarzbaer.gui.Tables;
 
 public class ImageMapEditor {
 
@@ -69,7 +73,8 @@ public class ImageMapEditor {
 	//  OK : add / remove area
 	//  OK : edit title & onclick
 	//  OK : selecting in AreaList  -> highlighting in EditorView
-	// TODO: selecting in AreaList <-  highlighting in EditorView
+	//  OK : coloring in AreaList  <-  highlighting in EditorView
+	// NOPE: selecting in AreaList <-  highlighting in EditorView
 	// TODO: coloring in AreaList
 	
 	ImageMapEditor(String title, MapImage mapImage, Vector<Area> areas, String suggestedHtmlOutFileName, boolean asStandAloneApp) {
@@ -84,7 +89,9 @@ public class ImageMapEditor {
 		JScrollPane areaListScrollPane = new JScrollPane(areaList);
 		areaListScrollPane.setBorder(BorderFactory.createTitledBorder("List of Areas"));
 		
-		editorView = new EditorView(800,600,areaListModel);
+		editorView = new EditorView(800,600,areaList,areaListModel);
+		
+		areaList.setCellRenderer(new ImageMapEditor.AreaListRenderer());
 
 		JMenuItem miALCMEdit;
 		JMenuItem miALCMRemove;
@@ -414,6 +421,22 @@ public class ImageMapEditor {
 			editorView.reset();
 	}
 	
+	private class AreaListRenderer implements ListCellRenderer<Area> {
+		Tables.LabelRendererComponent rendComp = new Tables.LabelRendererComponent();
+
+		@Override
+		public Component getListCellRendererComponent(JList<? extends Area> list, Area value, int index, boolean isSelected, boolean hasFocus) {
+			String valueStr = value==null ? "<null>" : value.toString();
+			rendComp.configureAsListCellRendererComponent(list, null, valueStr , index, isSelected, hasFocus, null, ()->{
+				if (editorView.isEditingArea(value)) return Color.RED;
+				return list.getForeground();
+			});
+			
+			return rendComp;
+		}
+	
+	}
+
 	static class AreaListModel implements ListModel<Area>, Iterable<Area> {
 		
 		private final Vector<ListDataListener> listDataListeners;

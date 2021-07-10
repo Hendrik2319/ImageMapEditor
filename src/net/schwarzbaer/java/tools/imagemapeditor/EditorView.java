@@ -11,6 +11,7 @@ import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
 import java.util.Vector;
 
+import javax.swing.JList;
 import javax.swing.JPopupMenu;
 
 import net.schwarzbaer.gui.ZoomableCanvas;
@@ -22,14 +23,16 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 	private static final Color COLOR_AREA = new Color(0xA0808080,true);
 	private static final Color COLOR_HIGHLIGHTED_AREA = Color.WHITE;
 	
-	private BufferedImage image;
+	private final JList<Area> areaList;
 	private final AreaListModel areaListModel;
+	private BufferedImage image;
 	private AreaEditing areaEditing;
 	private ContextMenu contextMenu;
 
-	EditorView(int width, int height, AreaListModel areaListModel) { this(null, width, height, areaListModel); }
-	EditorView(BufferedImage image, int width, int height, AreaListModel areaListModel) {
+	EditorView(int width, int height, JList<Area> areaList, AreaListModel areaListModel) { this(null, width, height, areaList, areaListModel); }
+	EditorView(BufferedImage image, int width, int height, JList<Area> areaList, AreaListModel areaListModel) {
 		this.image = image;
+		this.areaList = areaList;
 		this.areaListModel = areaListModel;
 		areaEditing = null;
 		contextMenu = null;
@@ -38,6 +41,11 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 		activateMapScale(COLOR_AXIS, "px", true);
 		activateAxes(COLOR_AXIS, true,true,true,true);
 		activateEditorMode();
+	}
+	
+	boolean isEditingArea(Area area) {
+		if (areaEditing==null) return false;
+		return areaEditing.area==area;
 	}
 	
 	boolean isViewStateOK() {
@@ -113,7 +121,10 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 			areaEditing.setMousePoint(pX,pY,minDist);
 		}
 		
-		if (mustRepaint) repaint();
+		if (mustRepaint) {
+			repaint();
+			areaList.repaint();
+		}
 	}
 	
 	private static abstract class AreaEditing {
