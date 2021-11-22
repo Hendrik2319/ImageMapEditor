@@ -90,8 +90,8 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 		float pX = Float.NaN;
 		float pY = Float.NaN;
 		if (p != null) {
-			pX = viewState.convertPos_ScreenToAngle_LongX(p.x);
-			pY = viewState.convertPos_ScreenToAngle_LatY(p.y);
+			pX = (float) viewState.convertPos_ScreenToAngle_LongX(p.x);
+			pY = (float) viewState.convertPos_ScreenToAngle_LatY(p.y);
 			
 			AreaEditing.DistanceResult min = null;
 			for (Area area : areaListModel) {
@@ -103,7 +103,8 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 			}
 			
 			if (min!=null) {
-				float distance_scr = viewState.convertLength_LengthToScreenF(min.distance);
+				Double val = viewState.convertLength_LengthToScreenF((double) min.distance);
+				float distance_scr = val.floatValue(); 
 				if (distance_scr > AreaEditing.MIN_HIGHLIGHT_AREA_DISTANCE_SCR && !min.isInside) nearestArea = null;
 			}
 		}
@@ -117,7 +118,7 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 		}
 		
 		if (areaEditing!=null) {
-			float minDist = viewState.convertLength_ScreenToLength(AreaEditing.MIN_HIGHLIGHT_HPOINT_DISTANCE_SCR);
+			float minDist = (float) viewState.convertLength_ScreenToLength(AreaEditing.MIN_HIGHLIGHT_HPOINT_DISTANCE_SCR);
 			areaEditing.setMousePoint(pX,pY,minDist);
 		}
 		
@@ -179,9 +180,9 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 
 		void onPressed (MouseEvent e, ViewState viewState) {
 			Point p = e.getPoint();
-			float pX = viewState.convertPos_ScreenToAngle_LongX(p.x);
-			float pY = viewState.convertPos_ScreenToAngle_LatY (p.y);
-			float minDist = viewState.convertLength_ScreenToLength(MIN_HIGHLIGHT_HPOINT_DISTANCE_SCR);
+			float pX = (float) viewState.convertPos_ScreenToAngle_LongX(p.x);
+			float pY = (float) viewState.convertPos_ScreenToAngle_LatY (p.y);
+			float minDist = (float) viewState.convertLength_ScreenToLength(MIN_HIGHLIGHT_HPOINT_DISTANCE_SCR);
 			setMousePoint(pX, pY, minDist);
 			if (highlightedHPindex<0) return;
 			startDragging(pX,pY);
@@ -189,15 +190,15 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 
 		void onReleased(MouseEvent e, ViewState viewState) {
 			Point p = e.getPoint();
-			float pX = viewState.convertPos_ScreenToAngle_LongX(p.x);
-			float pY = viewState.convertPos_ScreenToAngle_LatY (p.y);
+			float pX = (float) viewState.convertPos_ScreenToAngle_LongX(p.x);
+			float pY = (float) viewState.convertPos_ScreenToAngle_LatY (p.y);
 			stopDragging(pX,pY);
 			areaListModel.notifyAreaChanged(area);
 		}
 		void onDragged (MouseEvent e, ViewState viewState) {
 			Point p = e.getPoint();
-			float pX = viewState.convertPos_ScreenToAngle_LongX(p.x);
-			float pY = viewState.convertPos_ScreenToAngle_LatY (p.y);
+			float pX = (float) viewState.convertPos_ScreenToAngle_LongX(p.x);
+			float pY = (float) viewState.convertPos_ScreenToAngle_LatY (p.y);
 			dragging(pX,pY);
 			areaListModel.notifyAreaChanged(area);
 		}
@@ -432,8 +433,8 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 			contextMenu.clickedScreenPos = p;
 			if (viewState.isOk())
 				contextMenu.clickedPos = new Point2D.Float(
-					viewState.convertPos_ScreenToAngle_LongX(p.x),
-					viewState.convertPos_ScreenToAngle_LatY (p.y)
+					(float) viewState.convertPos_ScreenToAngle_LongX(p.x),
+					(float) viewState.convertPos_ScreenToAngle_LatY (p.y)
 				);
 			else
 				contextMenu.clickedPos = null;
@@ -498,15 +499,15 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 		case Circle:
 			int cX = viewState.convertPos_AngleToScreen_LongX(area.shape.center.x);
 			int cY = viewState.convertPos_AngleToScreen_LatY (area.shape.center.y);
-			int r  = viewState.convertLength_LengthToScreen((float) area.shape.radius);
+			int r  = viewState.convertLength_LengthToScreen((double) area.shape.radius);
 			g2.drawOval(x0+cX-r, y0+cY-r, 2*r, 2*r);
 			break;
 			
 		case Rect:
 			int c1X = viewState.convertPos_AngleToScreen_LongX(area.shape.corner1.x);
 			int c1Y = viewState.convertPos_AngleToScreen_LatY (area.shape.corner1.y);
-			int w  = viewState.convertLength_LengthToScreen((float) (area.shape.corner2.x-area.shape.corner1.x+1));
-			int h  = viewState.convertLength_LengthToScreen((float) (area.shape.corner2.y-area.shape.corner1.y+1));
+			int w  = viewState.convertLength_LengthToScreen((double) (area.shape.corner2.x-area.shape.corner1.x+1));
+			int h  = viewState.convertLength_LengthToScreen((double) (area.shape.corner2.y-area.shape.corner1.y+1));
 			g2.drawRect(x0+c1X, y0+c1Y, w, h);
 			break;
 		}
@@ -541,10 +542,10 @@ class EditorView extends ZoomableCanvas<EditorView.ViewState> {
 
 		@Override
 		protected void determineMinMax(MapLatLong min, MapLatLong max) {
-			min.longitude_x = (float) 0;
-			min.latitude_y  = (float) 0;
-			max.longitude_x = (float) (image==null ? 100 : image.getWidth ());
-			max.latitude_y  = (float) (image==null ? 100 : image.getHeight());
+			min.longitude_x = 0.0;
+			min.latitude_y  = 0.0;
+			max.longitude_x = (image==null ? 100.0 : image.getWidth ());
+			max.latitude_y  = (image==null ? 100.0 : image.getHeight());
 		}
 	}
 }
