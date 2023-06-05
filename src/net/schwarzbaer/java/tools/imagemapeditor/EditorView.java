@@ -14,7 +14,7 @@ import java.util.Vector;
 import javax.swing.JList;
 import javax.swing.JPopupMenu;
 
-import net.schwarzbaer.gui.ZoomableCanvas;
+import net.schwarzbaer.java.lib.gui.ZoomableCanvas;
 import net.schwarzbaer.java.tools.imagemapeditor.ImageMapEditor.AreaListModel;
 
 class EditorView extends ZoomableCanvas<EditorView.ViewState> {

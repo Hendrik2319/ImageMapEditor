@@ -42,11 +42,11 @@ import javax.swing.event.ListDataEvent;
 import javax.swing.event.ListDataListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
-import net.schwarzbaer.gui.ContextMenu;
-import net.schwarzbaer.gui.FileChooser;
-import net.schwarzbaer.gui.StandardMainWindow;
-import net.schwarzbaer.gui.StandardMainWindow.DefaultCloseOperation;
-import net.schwarzbaer.gui.Tables;
+import net.schwarzbaer.java.lib.gui.ContextMenu;
+import net.schwarzbaer.java.lib.gui.FileChooser;
+import net.schwarzbaer.java.lib.gui.StandardMainWindow;
+import net.schwarzbaer.java.lib.gui.Tables;
+import net.schwarzbaer.java.lib.gui.StandardMainWindow.DefaultCloseOperation;
 
 public class ImageMapEditor {
 
