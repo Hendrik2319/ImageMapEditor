@@ -14,6 +14,7 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.MalformedURLException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -545,10 +546,14 @@ public class ImageMapEditor {
 
 		public static MapImage loadImage(String urlStr) {
 			try {
-				return new MapImage(ImageIO.read(new URL(urlStr)),urlStr);
+				return new MapImage(ImageIO.read(new URI(urlStr).toURL()),urlStr);
 			} catch (MalformedURLException e) {
 				//e.printStackTrace();
 				System.err.printf("Malformed URL: \"%s\" -> %s%n", urlStr, e.getMessage());
+				return null;
+			} catch (URISyntaxException e) {
+				//e.printStackTrace();
+				System.err.printf("Wrong URI Syntax: \"%s\" -> %s%n", urlStr, e.getMessage());
 				return null;
 			} catch (IOException e) {
 				//e.printStackTrace();
