@@ -55,7 +55,7 @@ abstract class AreaDialog<FieldIndex extends Enum<FieldIndex>> extends JDialog {
 		}),c);
 		
 		valuePanel = new JPanel(new GridBagLayout());
-		valueFields = new EnumMap<FieldIndex,JTextField>(enumClass);
+		valueFields = new EnumMap<>(enumClass);
 		titleField   = addStringField("Title"  , null, str->{ area.title   = str; });
 		onclickField = addStringField("OnClick", null, str->{ area.onclick = str; });
 		
